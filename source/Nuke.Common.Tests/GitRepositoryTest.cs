@@ -3,6 +3,7 @@
 // https://github.com/nuke-build/nuke/blob/master/LICENSE
 
 using System;
+using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using FluentAssertions;
@@ -46,6 +47,35 @@ namespace Nuke.Common.Tests
             repository.Identifier.Should().NotBeNullOrEmpty();
             repository.LocalDirectory.Should().NotBeNullOrEmpty();
             repository.Head.Should().NotBeNullOrEmpty();
+        }
+        [Fact]
+        public void FromWorkTreeTest()
+        {
+            var branchName = "_worktree";
+            var worktreePath = Path.Combine(Directory.GetCurrentDirectory(), branchName);
+
+            if (Directory.Exists(worktreePath))
+                Directory.Delete(worktreePath, true);
+            Process.Start("git.exe", "worktree prune").WaitForExit();
+            Process.Start("git.exe", $"branch -D {branchName}").WaitForExit();
+
+            Process.Start("git.exe", $"worktree add {worktreePath}").WaitForExit();
+            try
+            {
+                var repository = GitRepository.FromLocalDirectory(worktreePath).NotNull();
+                repository.Endpoint.Should().NotBeNullOrEmpty();
+                repository.Identifier.Should().NotBeNullOrEmpty();
+                repository.LocalDirectory.Should().NotBeNullOrEmpty();
+                repository.Head.Should().NotBeNullOrEmpty();
+                repository.Branch.Should().Be(branchName);
+            }
+            finally
+            {
+                if (Directory.Exists(worktreePath))
+                    Directory.Delete(worktreePath, true);
+                Process.Start("git.exe", "worktree prune").WaitForExit();
+                Process.Start("git.exe", $"branch -D {branchName}").WaitForExit();
+            }
         }
     }
 }

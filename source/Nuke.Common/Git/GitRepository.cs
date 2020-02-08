@@ -27,11 +27,16 @@ namespace Nuke.Common.Git
         /// </summary>
         public static GitRepository FromLocalDirectory(string directory, string branch = null, string remote = "origin")
         {
-            var rootDirectory = FileSystemTasks.FindParentDirectory(directory, x => x.GetDirectories(".git").Any());
+            var rootDirectory = FileSystemTasks.FindParentDirectory(directory, x => x.GetDirectories(".git").Any() || x.GetFiles(".git").Any());
             ControlFlow.Assert(rootDirectory != null, $"Could not find root directory for '{directory}'.");
             var gitDirectory = Path.Combine(rootDirectory, ".git");
+            var worktreeDirectory = gitDirectory;
+            if(rootIsWorktree(rootDirectory))
+            {
+                GetWorktreeDirectories(rootDirectory, out gitDirectory, out worktreeDirectory);
+            }
 
-            var headFile = Path.Combine(gitDirectory, "HEAD");
+            var headFile = Path.Combine(worktreeDirectory, "HEAD");
             ControlFlow.Assert(File.Exists(headFile), $"File.Exists({headFile})");
             var headFileContent = File.ReadAllLines(headFile);
             var head = headFileContent.First();
@@ -68,6 +73,29 @@ namespace Nuke.Common.Git
             ControlFlow.Assert(match.Success, $"Url '{url}' could not be parsed.");
             return (match.Groups["endpoint"].Value, match.Groups["identifier"].Value);
         }
+        private static bool rootIsWorktree(string rootDirectory)
+        {
+            return File.Exists(Path.Combine(rootDirectory, ".git"));;
+        }
+
+        private static void GetWorktreeDirectories(string rootDirectory, out string gitDirectory, out string worktreeDirectory)
+        {
+            gitDirectory = null;
+            worktreeDirectory = null;
+            var key = "gitdir: ";
+            using(var reader = File.OpenText(Path.Combine(rootDirectory, ".git")))
+            {
+                string line = null;
+                while((line = reader.ReadLine()) != null)
+                {
+                    if(line.StartsWith(key))
+                    {
+                        worktreeDirectory = line.Substring(key.Length);
+                        gitDirectory = Path.Combine(worktreeDirectory, "..\\..");
+                    }
+                }
+            }
+        } 
 
         public GitRepository(
             string endpoint,
